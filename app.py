@@ -6,16 +6,22 @@ import os
 
 app = Flask(__name__)
 
-# Secret key for secure sessions
+# --------------------------------
+# Secure secret key for sessions
+# --------------------------------
 app.secret_key = os.environ.get(
     "SECRET_KEY",
     "task4-demo-secret-key-change-in-production"
 )
 
+# Secure session cookie settings
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 
-# -----------------------------
+
+# --------------------------------
 # Database setup
-# -----------------------------
+# --------------------------------
 def init_db():
     conn = sqlite3.connect("users.db")
 
@@ -31,9 +37,9 @@ def init_db():
     conn.close()
 
 
-# -----------------------------
+# --------------------------------
 # Input validation
-# -----------------------------
+# --------------------------------
 def valid_username(username):
     return re.fullmatch(
         r"[A-Za-z0-9_]{3,30}",
@@ -45,9 +51,9 @@ def valid_password(password):
     return len(password) >= 8
 
 
-# -----------------------------
+# --------------------------------
 # Home page
-# -----------------------------
+# --------------------------------
 @app.route("/")
 def home():
 
@@ -64,12 +70,13 @@ def home():
     """
 
 
-# -----------------------------
+# --------------------------------
 # Dashboard
-# -----------------------------
+# --------------------------------
 @app.route("/dashboard")
 def dashboard():
 
+    # Only authenticated users can access dashboard
     if "username" not in session:
         return redirect(url_for("login"))
 
@@ -79,9 +86,9 @@ def dashboard():
     )
 
 
-# -----------------------------
-# Register
-# -----------------------------
+# --------------------------------
+# User Registration
+# --------------------------------
 @app.route("/register", methods=["GET", "POST"])
 def register():
 
@@ -97,7 +104,7 @@ def register():
             ""
         )
 
-        # Input validation
+        # Validate username
         if not valid_username(username):
             return """
             <h3>Invalid username.</h3>
@@ -105,6 +112,7 @@ def register():
             <a href="/register">Try again</a>
             """
 
+        # Validate password
         if not valid_password(password):
             return """
             <h3>Password must contain at least 8 characters.</h3>
@@ -121,7 +129,7 @@ def register():
 
         try:
 
-            # Parameterized query prevents SQL injection
+            # Parameterized query protects against SQL injection
             conn.execute(
                 """
                 INSERT INTO users (username, password)
@@ -157,9 +165,9 @@ def register():
     return render_template("register.html")
 
 
-# -----------------------------
-# Login
-# -----------------------------
+# --------------------------------
+# User Login
+# --------------------------------
 @app.route("/login", methods=["GET", "POST"])
 def login():
 
@@ -175,7 +183,7 @@ def login():
             ""
         )
 
-        # Basic validation
+        # Basic input validation
         if not username or not password:
             return """
             <h3>Username and password are required.</h3>
@@ -184,7 +192,7 @@ def login():
 
         conn = sqlite3.connect("users.db")
 
-        # Parameterized query prevents SQL injection
+        # Parameterized query protects against SQL injection
         cursor = conn.execute(
             """
             SELECT username, password
@@ -198,7 +206,7 @@ def login():
 
         conn.close()
 
-        # Check username and bcrypt password
+        # Verify username and bcrypt password
         if user and bcrypt.checkpw(
             password.encode("utf-8"),
             user[1].encode("utf-8")
@@ -218,9 +226,9 @@ def login():
     return render_template("login.html")
 
 
-# -----------------------------
+# --------------------------------
 # Logout
-# -----------------------------
+# --------------------------------
 @app.route("/logout")
 def logout():
 
@@ -230,11 +238,12 @@ def logout():
     return redirect(url_for("home"))
 
 
-# -----------------------------
+# --------------------------------
 # Start application
-# -----------------------------
+# --------------------------------
 if __name__ == "__main__":
 
     init_db()
 
-    app.run(debug=True)
+    # Debug mode disabled for secure configuration
+    app.run(debug=False)
