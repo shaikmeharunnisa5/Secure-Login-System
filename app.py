@@ -1,12 +1,16 @@
-from flask import Flask, request, redirect, url_for, session
+from flask import Flask, request, redirect, url_for, session, render_template
 import sqlite3
 import bcrypt
 import re
+import os
 
 app = Flask(__name__)
 
 # Secret key for secure sessions
-app.secret_key = "task4-secure-login-secret-key"
+app.secret_key = os.environ.get(
+    "SECRET_KEY",
+    "task4-demo-secret-key-change-in-production"
+)
 
 
 # -----------------------------
@@ -31,7 +35,10 @@ def init_db():
 # Input validation
 # -----------------------------
 def valid_username(username):
-    return re.fullmatch(r"[A-Za-z0-9_]{3,30}", username) is not None
+    return re.fullmatch(
+        r"[A-Za-z0-9_]{3,30}",
+        username
+    ) is not None
 
 
 def valid_password(password):
@@ -45,13 +52,7 @@ def valid_password(password):
 def home():
 
     if "username" in session:
-        return f"""
-        <h1>Welcome, {session["username"]}!</h1>
-
-        <p>You are successfully logged in.</p>
-
-        <a href="/logout">Logout</a>
-        """
+        return redirect(url_for("dashboard"))
 
     return """
     <h1>Secure Login System</h1>
@@ -64,6 +65,21 @@ def home():
 
 
 # -----------------------------
+# Dashboard
+# -----------------------------
+@app.route("/dashboard")
+def dashboard():
+
+    if "username" not in session:
+        return redirect(url_for("login"))
+
+    return render_template(
+        "dashboard.html",
+        username=session["username"]
+    )
+
+
+# -----------------------------
 # Register
 # -----------------------------
 @app.route("/register", methods=["GET", "POST"])
@@ -71,8 +87,15 @@ def register():
 
     if request.method == "POST":
 
-        username = request.form.get("username", "").strip()
-        password = request.form.get("password", "")
+        username = request.form.get(
+            "username",
+            ""
+        ).strip()
+
+        password = request.form.get(
+            "password",
+            ""
+        )
 
         # Input validation
         if not valid_username(username):
@@ -100,8 +123,14 @@ def register():
 
             # Parameterized query prevents SQL injection
             conn.execute(
-                "INSERT INTO users (username, password) VALUES (?, ?)",
-                (username, hashed_password.decode("utf-8"))
+                """
+                INSERT INTO users (username, password)
+                VALUES (?, ?)
+                """,
+                (
+                    username,
+                    hashed_password.decode("utf-8")
+                )
             )
 
             conn.commit()
@@ -121,36 +150,11 @@ def register():
 
             return """
             <h3>Username already exists.</h3>
+
             <a href="/register">Try another username</a>
             """
 
-    return """
-    <h1>Register</h1>
-
-    <form method="POST">
-
-        <label>Username:</label>
-        <br>
-
-        <input type="text" name="username" required>
-
-        <br><br>
-
-        <label>Password:</label>
-        <br>
-
-        <input type="password" name="password" required>
-
-        <br><br>
-
-        <button type="submit">Register</button>
-
-    </form>
-
-    <br>
-
-    <a href="/">Home</a>
-    """
+    return render_template("register.html")
 
 
 # -----------------------------
@@ -161,8 +165,15 @@ def login():
 
     if request.method == "POST":
 
-        username = request.form.get("username", "").strip()
-        password = request.form.get("password", "")
+        username = request.form.get(
+            "username",
+            ""
+        ).strip()
+
+        password = request.form.get(
+            "password",
+            ""
+        )
 
         # Basic validation
         if not username or not password:
@@ -175,7 +186,11 @@ def login():
 
         # Parameterized query prevents SQL injection
         cursor = conn.execute(
-            "SELECT username, password FROM users WHERE username = ?",
+            """
+            SELECT username, password
+            FROM users
+            WHERE username = ?
+            """,
             (username,)
         )
 
@@ -183,52 +198,24 @@ def login():
 
         conn.close()
 
-        # Check user and password
+        # Check username and bcrypt password
         if user and bcrypt.checkpw(
             password.encode("utf-8"),
             user[1].encode("utf-8")
         ):
 
-            # Create session
+            # Create authenticated session
             session["username"] = user[0]
 
-            return redirect(url_for("home"))
+            return redirect(url_for("dashboard"))
 
-        else:
+        return """
+        <h3>Invalid username or password.</h3>
 
-            return """
-            <h3>Invalid username or password.</h3>
+        <a href="/login">Try again</a>
+        """
 
-            <a href="/login">Try again</a>
-            """
-
-    return """
-    <h1>Login</h1>
-
-    <form method="POST">
-
-        <label>Username:</label>
-        <br>
-
-        <input type="text" name="username" required>
-
-        <br><br>
-
-        <label>Password:</label>
-        <br>
-
-        <input type="password" name="password" required>
-
-        <br><br>
-
-        <button type="submit">Login</button>
-
-    </form>
-
-    <br>
-
-    <a href="/">Home</a>
-    """
+    return render_template("login.html")
 
 
 # -----------------------------
@@ -237,7 +224,7 @@ def login():
 @app.route("/logout")
 def logout():
 
-    # Remove username from session
+    # Remove authenticated session
     session.pop("username", None)
 
     return redirect(url_for("home"))
